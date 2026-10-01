@@ -1,27 +1,20 @@
 # Assurance Case Evidence Graph CPS
 
-**Machine-readable assurance cases and evidence graphs for continuously updated safety and security assurance in cyber-physical systems.**
+**Machine-readable, continuously evolving assurance cases for traceable CPS safety and security evidence.**
 
-This repository studies how CPS safety and security arguments can remain traceable as verification results, runtime evidence, digital-twin state, assumptions, software versions, and operating conditions change over time.
+This repository studies how cyber-physical-system assurance arguments can remain inspectable as software versions, verification results, runtime observations, assumptions, uncertainty bounds, and operating conditions change over time.
 
-The project treats an assurance case as a **living evidence graph** rather than a static document. Claims remain connected to the evidence, assumptions, contexts, and defeaters on which they depend, enabling automated freshness checks, contradiction surfacing, change-impact analysis, graph validation, and descriptive assurance-health metrics.
+The project treats an assurance case as a **living evidence graph** rather than a static document. Claims remain connected to the evidence, assumptions, contexts, and defeaters on which they depend. The current v0.3 research layer adds provenance-preserving evidence adapters and versioned graph snapshots so assurance evolution can be measured rather than described informally.
 
 ## Core research question
 
-> **Can continuously updated evidence graphs improve the traceability, consistency, maintainability, and reviewability of CPS assurance as evidence and assumptions evolve?**
+> **Can continuously updated evidence graphs improve the traceability, consistency, maintainability, and reviewability of CPS assurance as heterogeneous evidence and assumptions evolve?**
 
-## Research objectives
+## Why this matters
 
-The project investigates whether machine-readable assurance graphs can:
+A safety argument can become outdated even when none of its sentences change. A verification result may rely on an assumption that no longer holds. A runtime shield may begin falling back more often. A digital-twin model may be refreshed. A software release may invalidate a test artifact. Traditional assurance documents make these dependencies difficult to track systematically.
 
-- expose unsupported or weakly supported claims;
-- identify evidence that has become stale or expired;
-- preserve contradictory evidence instead of silently replacing earlier results;
-- propagate assumption changes to downstream claims;
-- identify circular or structurally weak assurance arguments;
-- reduce unnecessary full-case review after localized system changes;
-- preserve source provenance across formal verification, runtime assurance, digital twins, tests, and monitoring;
-- support reproducible human-centered assurance experiments.
+This repository explores whether a machine-readable graph can make those changes explicit.
 
 ## Architecture
 
@@ -29,28 +22,31 @@ The project investigates whether machine-readable assurance graphs can:
 Formal Verification Manifest ─┐
 Runtime Safety-Shield Trace ──┤
 Digital Twin State ───────────┤
-Test / CI Evidence ───────────┼──> Evidence Normalization
-Operational Monitoring ───────┤             │
-Human Review Decisions ───────┘             ↓
-                                  Assurance Evidence Graph
-                                             │
-                     ┌───────────────────────┼───────────────────────┐
-                     ↓                       ↓                       ↓
-              Claim Assessment       Structural Validation    Change Impact
-                     │                       │                       │
-                     ├─ stale support        ├─ cycles              ├─ assumptions
-                     ├─ contradictions       ├─ orphan evidence     ├─ evidence
-                     ├─ unmet assumptions    ├─ isolated claims     └─ contexts
-                     └─ experimental         └─ missing status
+Test / CI Evidence ───────────┼──> Provenance-Preserving Adapters
+Operational Monitoring ───────┤                 │
+Human Review Decisions ───────┘                 ↓
+                                     Assurance Evidence Graph
+                                                │
+                     ┌──────────────────────────┼──────────────────────────┐
+                     ↓                          ↓                          ↓
+              Claim Assessment          Structural Validation      Graph Snapshots
+                     │                          │                          │
+                     ├─ stale support           ├─ cycles                 ├─ digest
+                     ├─ contradictions          ├─ orphan evidence        ├─ diff
+                     ├─ unmet assumptions       ├─ isolated claims        └─ changed nodes
+                     └─ experimental            └─ missing status
                         confidence
-                                             │
-                                             ↓
-                                   Human Assurance Review
+                                                │
+                                                ↓
+                                      Change-Impact Analysis
+                                                │
+                                                ↓
+                                      Focused Human Review
 ```
 
 ## Graph model
 
-The v0.2 research model uses five node types:
+The research model uses five node types:
 
 | Node | Purpose |
 |---|---|
@@ -67,190 +63,270 @@ Relationships are represented with four edge types:
 | `supports` | Source contributes positive support to a target claim. |
 | `depends_on` | Target validity depends on the source. |
 | `contradicts` | Source provides counter-evidence against the target. |
-| `qualifies` | Source limits or constrains the interpretation of the target. |
+| `qualifies` | Source constrains the scope or interpretation of the target. |
 
 ## Implemented capabilities
 
-### Claim assessment
+### 1. Claim assessment
 
-For a selected claim, the analyzer reports:
+For a selected claim, the analyzer reports whether the claim is currently supported, which support is stale, which nodes contradict it, which assumptions are unmet, and an experimental propagated confidence value.
 
-- whether the claim is currently supported;
-- stale supporting evidence;
-- explicit contradictions;
-- unmet assumptions;
-- an experimental propagated confidence value.
+The current confidence rule uses the minimum confidence among usable supporting evidence. It is intentionally simple and inspectable and must **not** be interpreted as a probability that a physical system is safe.
 
-The default confidence rule uses the minimum confidence among usable supporting evidence. It is deliberately simple and inspectable and must **not** be interpreted as a probability that a physical system is safe.
+### 2. Evidence freshness
 
-### Evidence freshness
+Evidence can carry `observed_at` and `valid_until` timestamps. Expired evidence remains in the graph for auditability but no longer counts as current support.
 
-Evidence nodes can carry `observed_at` and `valid_until` timestamps. Expired evidence remains in the graph for auditability but no longer counts as current support.
+This supports experiments on calibration expiry, monitoring freshness, digital-twin state age, and configuration-sensitive verification evidence.
 
-This enables research on evidence ageing, calibration expiry, digital-twin freshness, monitoring validity windows, and configuration-sensitive verification evidence.
+### 3. Change-impact analysis
 
-### Change-impact analysis
-
-When an evidence item, assumption, context, or supporting claim changes, the graph can identify downstream claims reachable through support, dependency, and qualification relationships.
+When evidence, assumptions, contexts, or subclaims change, the graph identifies downstream claims reachable through support, dependency, and qualification relationships.
 
 ```text
-Assumption changed
-      ↓
+Calibration assumption changed
+          ↓
 State-estimation claim
-      ↓
+          ↓
 Runtime-shield trust claim
-      ↓
-System-level safety claim
+          ↓
+System-level assurance claim
 ```
 
-This supports incremental assurance review instead of automatically requiring a complete review of the entire case after every change.
+This makes incremental review possible instead of automatically requiring complete reinspection of the whole assurance case.
 
-### Structural validation
+### 4. Structural validation
 
-The validator now detects or surfaces:
+The validator detects or surfaces:
 
 - direct self-loops;
-- cycles in assurance dependency paths;
+- cycles in support/dependency/qualification paths;
 - isolated claims;
 - orphan evidence;
 - assumptions without recorded status;
 - unusual support relationships;
-- questionable use of context as contradictory evidence.
+- questionable context usage.
 
-A structurally valid graph is **not** automatically a valid safety argument. Validation only checks whether the graph is coherent enough for further assurance analysis.
+A structurally valid graph is not automatically a valid safety argument. Validation only checks graph coherence.
 
-### Assurance health metrics
+### 5. Assurance-health metrics
 
-The repository now computes descriptive graph-health measures including:
+The repository computes descriptive measures such as:
 
-- total nodes and edges;
-- counts of claims, evidence, assumptions, contexts, and defeaters;
-- number of supported claims;
-- number of contradicted claims;
-- number of claims with stale evidence;
-- number of claims with unmet assumptions;
+- node and edge counts;
+- claim/evidence/assumption/context/defeater counts;
+- supported-claim count;
+- contradicted-claim count;
+- claims relying on stale evidence;
+- claims with unmet assumptions;
 - support coverage;
 - stale-claim rate.
 
 These are argument-quality indicators, not certification scores.
 
-### Machine-readable persistence
+### 6. Provenance-preserving evidence integration
 
-Assurance cases can be serialized to and restored from JSON while preserving node type, statement, confidence, timestamps, metadata, edge type, and rationale.
+The repository now implements adapters for two external evidence classes.
 
-## Example usage
+#### Formal-verification manifests
+
+`evidence_from_verification_manifest()` preserves:
+
+- run identifier;
+- timestamp;
+- source commit;
+- CPS domain;
+- verification status and completeness;
+- method configuration;
+- finite horizon;
+- assumptions;
+- uncertainty bounds;
+- result details;
+- reproducibility metadata;
+- source schema version.
+
+A `VERIFIED_SAFE` source result stays explicitly tied to its model and assumptions.
+
+#### Runtime-assurance traces
+
+`evidence_from_runtime_trace()` summarizes:
+
+- number of decisions;
+- modifications;
+- fallbacks;
+- observed unsafe-state records;
+- minimum safety margin;
+- trace-level metadata;
+- original runtime records.
+
+The adapter creates evidence about the observed run. It does not convert a runtime trace into a universal safety claim.
+
+### 7. Versioned assurance snapshots
+
+`snapshot_graph()` creates a canonical graph snapshot with:
+
+- a snapshot identifier;
+- creation time;
+- canonical machine-readable payload;
+- SHA-256 digest.
+
+The digest supports reproducibility and change tracking. It is not an attestation that the evidence itself is true.
+
+### 8. Assurance graph differencing
+
+`diff_snapshots()` reports:
+
+- added nodes;
+- removed nodes;
+- changed nodes;
+- added relationships;
+- removed relationships.
+
+That diff can then be combined with `affected_claims()` to decide which claims need human reassessment.
+
+## Dynamic assurance workflow
+
+```text
+New engineering artifact
+        │
+        ↓
+Source-specific adapter
+        │
+        ↓
+Normalized evidence node
+        │
+        ↓
+Updated evidence graph
+        │
+        ├──> structural validation
+        ├──> claim reassessment
+        ├──> graph-health metrics
+        └──> snapshot + SHA-256 digest
+                    │
+                    ↓
+               snapshot diff
+                    │
+                    ↓
+             changed node IDs
+                    │
+                    ↓
+             affected claims
+                    │
+                    ↓
+              focused review
+```
+
+## Example
 
 ```python
-from datetime import datetime, timedelta, timezone
-
 from assurance_graph import (
     AssuranceEdge,
     AssuranceGraph,
     AssuranceNode,
     EdgeType,
     NodeType,
-    assess_claim,
-    summarize_assurance_graph,
-    validate_graph,
+    affected_claims,
+    diff_snapshots,
+    evidence_from_verification_manifest,
+    snapshot_graph,
 )
 
-now = datetime.now(timezone.utc)
 graph = AssuranceGraph()
 
 graph.add_node(
     AssuranceNode(
-        "claim.safe",
+        "claim.system-envelope",
         NodeType.CLAIM,
-        "The modeled CPS remains within its declared safety envelope.",
+        "The modeled CPS remains within the declared safety envelope.",
     )
 )
-graph.add_node(
-    AssuranceNode(
-        "evidence.verification",
-        NodeType.EVIDENCE,
-        "Finite-horizon reachability analysis reports VERIFIED_SAFE.",
-        confidence=0.95,
-        observed_at=now,
-        valid_until=now + timedelta(days=7),
-        metadata={"source": "formal-verification-manifest"},
+
+manifest = {
+    "run_id": "battery-interval-001",
+    "timestamp_utc": "2026-10-01T00:00:00Z",
+    "domain": "battery",
+    "method": {"name": "interval"},
+    "result": {"status": "VERIFIED_SAFE", "complete": True},
+}
+
+evidence = evidence_from_verification_manifest(manifest)
+graph.add_node(evidence)
+graph.add_edge(
+    AssuranceEdge(
+        evidence.id,
+        "claim.system-envelope",
+        EdgeType.SUPPORTS,
+        "Finite-horizon formal verification evidence.",
     )
 )
+
+before = snapshot_graph(graph, snapshot_id="baseline")
+
 graph.add_node(
     AssuranceNode(
-        "assumption.bounds",
+        "assumption.disturbance-bound",
         NodeType.ASSUMPTION,
-        "Runtime disturbances remain within the modeled uncertainty bounds.",
+        "Runtime disturbances remain inside the modeled bound.",
         metadata={"status": "validated"},
     )
 )
-
 graph.add_edge(
     AssuranceEdge(
-        "evidence.verification",
-        "claim.safe",
-        EdgeType.SUPPORTS,
-        "Formal verification provides bounded-model evidence.",
-    )
-)
-graph.add_edge(
-    AssuranceEdge(
-        "assumption.bounds",
-        "claim.safe",
+        "assumption.disturbance-bound",
+        "claim.system-envelope",
         EdgeType.DEPENDS_ON,
-        "The verification result is conditional on this uncertainty bound.",
     )
 )
 
-assessment = assess_claim(graph, "claim.safe", now=now)
-validation = validate_graph(graph)
-metrics = summarize_assurance_graph(graph, now=now)
+after = snapshot_graph(graph, snapshot_id="updated")
+diff = diff_snapshots(before, after)
 
-print(assessment)
-print(validation.valid)
-print(metrics.to_dict())
+print(diff.added_nodes)
+print(affected_claims(graph, "assumption.disturbance-bound"))
 ```
 
-## Planned evidence integrations
+## Research questions now enabled
 
-The graph is designed to ingest artifacts from related CPS workflows while preserving source semantics and provenance:
+The v0.3 implementation supports more concrete experimental questions:
 
-| Source | Candidate evidence |
-|---|---|
-| Formal verification | verification status, horizon, assumptions, uncertainty bounds, witness/intersection metadata |
-| Runtime assurance | accepted/modified/fallback decisions, predicted reachable sets, margins, intervention reasons |
-| Digital twins | state estimates, uncertainty, freshness, model-version metadata, drift indicators |
-| Testing / CI | test outcomes, coverage, regression evidence, configuration identity |
-| Operational monitoring | anomalies, calibration state, observed bounds, incident indicators |
-| Human review | accepted defeaters, review rationale, assumption validation, disposition decisions |
-
-The next engineering stage is to implement provenance-preserving adapters for these evidence sources.
+1. **Traceability** — can reviewers follow a system-level claim back to its assumptions and source artifacts?
+2. **Freshness** — can stale support be detected before reviewers rely on it?
+3. **Change impact** — can localized changes identify the correct subset of downstream claims?
+4. **Contradiction handling** — can negative runtime evidence remain visible beside positive formal evidence?
+5. **Argument quality** — can structural metrics reveal weak or circular assurance arguments?
+6. **Provenance retention** — how much source information survives normalization?
+7. **Assurance evolution** — how often and why do claim-support states change across graph snapshots?
+8. **Review workload** — can graph differencing reduce unnecessary full-case review without missing invalidated claims?
 
 ## Experimental program
 
-The detailed research framework defines several controlled experiments:
+Planned controlled experiments include:
 
-1. **Freshness degradation** — expire selected evidence and measure whether invalidated claims are detected.
-2. **Assumption violation** — change a validated assumption to violated and compare automated affected-claim results with a hand-labeled reference set.
-3. **Contradictory runtime evidence** — add a defeater after prior positive evidence and test whether positive support is prevented from masking the contradiction.
-4. **Graph defects** — inject cycles, orphan evidence, isolated claims, and missing assumption status and measure validator performance.
-5. **Cross-tool integration** — ingest formal-verification and runtime-assurance artifacts and evaluate provenance retention and claim traceability.
-6. **Human review study** — compare document-only review with graph-assisted review using review time, missed issues, unnecessary inspections, and agreement as outcomes.
+- evidence-expiry scenarios;
+- assumption-violation propagation;
+- contradictory runtime evidence;
+- deliberately defective assurance graphs;
+- cross-tool evidence normalization;
+- snapshot-based assurance evolution;
+- incremental review precision/recall;
+- reviewer studies comparing document-only and graph-assisted assurance.
 
 ## Candidate evaluation metrics
 
-Research evaluation may include:
+Potential empirical measures include:
 
-- unsupported-claim detection precision and recall;
+- unsupported-claim detection precision/recall;
 - stale-evidence detection accuracy;
-- affected-claim identification precision and recall;
+- affected-claim precision/recall;
 - contradiction detection rate;
+- provenance-field retention rate;
+- changed-node detection accuracy;
 - evidence-to-claim trace length;
-- proportion of assumptions with explicit status;
 - support coverage;
 - stale-claim rate;
-- reviewer time to identify invalidated claims;
-- reviewer agreement;
-- unnecessary full-case reviews avoided by incremental impact analysis.
+- number of claims requiring review per update;
+- unnecessary full-case reviews avoided;
+- reviewer time and agreement.
 
 ## Quick start
 
@@ -268,7 +344,8 @@ assurance-case-evidence-graph-cps/
 │   └── workflows/
 ├── docs/
 │   ├── research-protocol.md
-│   └── detailed-research-framework.md
+│   ├── detailed-research-framework.md
+│   └── evidence-integration-and-evolution.md
 ├── examples/
 │   └── build_demo_case.py
 ├── src/
@@ -278,10 +355,13 @@ assurance-case-evidence-graph-cps/
 │       ├── analysis.py
 │       ├── validation.py
 │       ├── metrics.py
+│       ├── integrations.py
+│       ├── snapshots.py
 │       └── io.py
 ├── tests/
 │   ├── test_assurance_graph.py
-│   └── test_validation_metrics.py
+│   ├── test_validation_metrics.py
+│   └── test_integrations_snapshots.py
 ├── pyproject.toml
 └── README.md
 ```
@@ -289,7 +369,8 @@ assurance-case-evidence-graph-cps/
 ## Research documents
 
 - [`docs/research-protocol.md`](docs/research-protocol.md) defines the initial experimental protocol.
-- [`docs/detailed-research-framework.md`](docs/detailed-research-framework.md) provides the expanded research questions, semantics, validation rules, evidence lifecycle, integration architecture, evaluation plan, threats to validity, reproducibility requirements, and roadmap.
+- [`docs/detailed-research-framework.md`](docs/detailed-research-framework.md) defines the expanded research questions, semantics, validation rules, evidence lifecycle, evaluation plan, threats to validity, reproducibility requirements, and roadmap.
+- [`docs/evidence-integration-and-evolution.md`](docs/evidence-integration-and-evolution.md) defines provenance-preserving adapters, graph snapshots, differencing, and the incremental review workflow.
 
 ## Research boundary
 
@@ -299,8 +380,9 @@ The project deliberately preserves these distinctions:
 
 - graph support is not physical-system safety;
 - confidence is not a calibrated safety probability;
-- formal verification results remain conditional on their models and assumptions;
-- runtime observations remain conditional on their operating context;
+- formal verification remains conditional on its model and assumptions;
+- runtime traces remain conditional on a particular execution context;
+- a snapshot digest proves payload consistency, not evidence truth;
 - absence of detected contradiction is not proof that no contradiction exists;
 - automated impact analysis supports but does not replace accountable human review.
 
@@ -308,17 +390,21 @@ The project deliberately preserves these distinctions:
 
 ### Phase 1 — Core graph mechanics
 
-Typed graph model, serialization, claim assessment, evidence freshness, contradiction handling, impact analysis, structural validation, and assurance-health metrics.
+Typed graph model, serialization, claim assessment, freshness, contradiction handling, impact analysis, validation, and metrics.
 
-### Phase 2 — Evidence ingestion
+### Phase 2 — Evidence integration
 
-Formal-verification manifest adapters, runtime-assurance trace adapters, digital-twin state adapters, CI/test evidence adapters, and provenance metadata.
+Formal-verification and runtime-assurance adapters are now implemented. Next: digital-twin, CI/test, calibration, model-version, and human-review adapters.
 
 ### Phase 3 — Dynamic assurance
 
-Evidence supersession, graph snapshots, assumption history, diff-based review, configuration-aware evidence invalidation, and incremental re-evaluation.
+Snapshotting and differencing are now implemented. Next: evidence supersession, assumption history, configuration-aware invalidation, graph-version lineage, and incremental re-evaluation.
 
-### Phase 4 — Human-centered assurance
+### Phase 4 — Empirical evaluation
+
+Benchmark suites for provenance retention, affected-claim detection, graph-defect detection, and assurance evolution.
+
+### Phase 5 — Human-centered assurance
 
 Graph visualization, reviewer studies, explanation usefulness, review-effort measurement, disagreement analysis, and evidence-to-decision traceability.
 
